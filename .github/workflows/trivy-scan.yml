@@ -1,6 +1,9 @@
 name: Trivy Security Scan
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -35,10 +38,10 @@ jobs:
 
       # PR에 스캔 결과 리포트 코멘트 추가
       - name: Upload Trivy Results as PR Comment
-        if: failure() # 실패 시에만 실행
+        if: failure() && github.event_name == 'pull_request'
         run: |
           TRIVY_RESULTS=$(cat result.json)
-          PR_COMMENT="Trivy scan detected critical/high vulnerabilities:\n\n$TRIVY_RESULTS"
+          PR_COMMENT="Trivy scan detected critical/high vulnerabilities:\n\n\`\`\`json\n$TRIVY_RESULTS\n\`\`\`"
           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -X POST \
             -d "{\"body\":\"$PR_COMMENT\"}" \
