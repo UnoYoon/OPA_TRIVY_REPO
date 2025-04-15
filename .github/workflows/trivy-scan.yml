@@ -24,14 +24,15 @@ jobs:
 
       - name: Run Trivy via Docker
         run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
             -v ${{ github.workspace }}:/workspace \
             aquasec/trivy:latest \
             image --exit-code 1 --severity CRITICAL,HIGH -f json -o /workspace/result.json my-app:latest
 
       - name: Upload full Trivy result as artifact
         if: failure()
-        uses: actions/upload-artifact@v4  # ✅ v3 → v4로 수정 (v3는 더 이상 마켓에서 인식 안 됨)
+        uses: actions/upload-artifact@v3
         with:
           name: trivy-full-report
           path: result.json
@@ -41,12 +42,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=$(jq --raw-output .number "$GITHUB_EVENT_PATH")  # ✅ 수정: `.pull_request.number` → `.number`
+          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
           SUMMARY=$(jq '[.Results[].Vulnerabilities[] | {Target, PkgName, InstalledVersion, VulnerabilityID, Severity}]' result.json)
           SHORT_SUMMARY=$(echo "$SUMMARY" | jq '.[0:5]')
-          COMMENT="🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$SHORT_SUMMARY\n\`\`\`\n📎 Full report attached as artifact."
+          COMMENT=$(echo -e "🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$SHORT_SUMMARY\n\`\`\`\n📎 Full report attached as artifact." | jq -Rs .)
+
           curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -X POST \
-            -d "{\"body\": \"$COMMENT\"}" \
+            -d "{\"body\": $COMMENT}" \
             "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
