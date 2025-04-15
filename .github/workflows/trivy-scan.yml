@@ -31,7 +31,7 @@ jobs:
 
       - name: Upload full Trivy result as artifact
         if: failure()
-        uses: actions/upload-artifact@v2  # ✅ 버전 수정
+        uses: actions/upload-artifact@v3  # ❗ 다시 v3로 시도
         with:
           name: trivy-full-report
           path: result.json
@@ -49,17 +49,4 @@ jobs:
             -H "Content-Type: application/json" \
             -X POST \
             -d "{\"body\": \"$COMMENT\"}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
-
-      - name: Upload Trivy Results as PR Comment
-        if: failure() && github.event_name == 'pull_request'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          COMMENT_BODY=$(jq -Rs '.' < result.json)
-          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            -X POST \
-            -d "{\"body\": \"🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$COMMENT_BODY\n\`\`\`\"}" \
             "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
