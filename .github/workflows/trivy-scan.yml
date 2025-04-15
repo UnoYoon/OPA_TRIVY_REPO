@@ -17,22 +17,21 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2  # ✅ v4 → v2로 수정
+        uses: docker/setup-buildx-action@v2
 
       - name: Build Docker Image
         run: docker build -t my-app:latest .
 
       - name: Run Trivy via Docker
         run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             -v ${{ github.workspace }}:/workspace \
             aquasec/trivy:latest \
             image --exit-code 1 --severity CRITICAL,HIGH -f json -o /workspace/result.json my-app:latest
 
       - name: Upload full Trivy result as artifact
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2  # ❗ 변경된 버전
         with:
           name: trivy-full-report
           path: result.json
@@ -43,12 +42,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          SUMMARY=$(jq '[.Results[].Vulnerabilities[] | {Target, PkgName, InstalledVersion, VulnerabilityID, Severity}]' result.json)
-          SHORT_SUMMARY=$(echo "$SUMMARY" | jq '.[0:5]')
-          COMMENT=$(echo -e "🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$SHORT_SUMMARY\n\`\`\`\n📎 Full report attached as artifact." | jq -Rs .)
-
+          SUMMARY=$(jq '[.Results[].Vulnerabilities[] | {Target, PkgName, InstalledVersion, VulnerabilityID, Severity}]' result.json | jq -s .)
+          SHORT_SUMMARY=$(echo "$SUMMARY" | jq '.[0][:5]')
+          COMMENT="🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$SHORT_SUMMARY\n\`\`\`\n📎 Full report attached as artifact."
           curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -X POST \
-            -d "{\"body\": $COMMENT}" \
+            -d "{\"body\": \"$COMMENT\"}" \
             "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
