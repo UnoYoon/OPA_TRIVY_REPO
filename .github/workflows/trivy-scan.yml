@@ -31,7 +31,7 @@ jobs:
 
       - name: Upload full Trivy result as artifact
         if: failure()
-        uses: actions/upload-artifact@v3  # ❗ 다시 v3로 시도
+        uses: actions/upload-artifact@v4  # ✅ v3 → v4로 수정 (v3는 더 이상 마켓에서 인식 안 됨)
         with:
           name: trivy-full-report
           path: result.json
@@ -41,9 +41,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
-          SUMMARY=$(jq '[.Results[].Vulnerabilities[] | {Target, PkgName, InstalledVersion, VulnerabilityID, Severity}]' result.json | jq -s .)
-          SHORT_SUMMARY=$(echo "$SUMMARY" | jq '.[0][:5]')
+          PR_NUMBER=$(jq --raw-output .number "$GITHUB_EVENT_PATH")  # ✅ 수정: `.pull_request.number` → `.number`
+          SUMMARY=$(jq '[.Results[].Vulnerabilities[] | {Target, PkgName, InstalledVersion, VulnerabilityID, Severity}]' result.json)
+          SHORT_SUMMARY=$(echo "$SUMMARY" | jq '.[0:5]')
           COMMENT="🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$SHORT_SUMMARY\n\`\`\`\n📎 Full report attached as artifact."
           curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
