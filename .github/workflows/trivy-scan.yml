@@ -13,30 +13,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 코드 체크아웃
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Docker 빌드를 위한 Docker Buildx 설정
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Docker 이미지 빌드
       - name: Build Docker Image
         run: docker build -t my-app:latest .
 
-      # Trivy 설치
-      - name: Install Trivy
+      - name: Run Trivy via Docker
         run: |
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
-          sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${{ github.workspace }}:/workspace \
+            aquasec/trivy:latest \
+            image --exit-code 1 --severity CRITICAL,HIGH -f json -o /workspace/result.json my-app:latest
 
-      # Trivy로 취약점 스캔 실행
-      - name: Run Trivy scan on Docker Image
-        run: |
-          trivy image --exit-code 1 --severity CRITICAL,HIGH -f json -o result.json my-app:latest
-
-      # PR에 스캔 결과 리포트 코멘트 추가
       - name: Upload Trivy Results as PR Comment
         if: failure() && github.event_name == 'pull_request'
         run: |
