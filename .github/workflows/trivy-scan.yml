@@ -31,7 +31,7 @@ jobs:
 
       - name: Upload full Trivy result as artifact
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2  # ✅ 버전 수정
         with:
           name: trivy-full-report
           path: result.json
