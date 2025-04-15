@@ -31,10 +31,13 @@ jobs:
 
       - name: Upload Trivy Results as PR Comment
         if: failure() && github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TRIVY_RESULTS=$(cat result.json)
-          PR_COMMENT="Trivy scan detected critical/high vulnerabilities:\n\n\`\`\`json\n$TRIVY_RESULTS\n\`\`\`"
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+          COMMENT_BODY=$(jq -Rs '.' < result.json)
+          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
             -X POST \
-            -d "{\"body\":\"$PR_COMMENT\"}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+            -d "{\"body\": \"🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$COMMENT_BODY\n\`\`\`\"}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
