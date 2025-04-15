@@ -1,0 +1,25 @@
+name: Trivy Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Trivy
+        run: |
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.1_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.1_Linux-64bit.deb
+
+      - name: Build Docker Image
+        run: docker build -t my-app:latest .
+
+      - name: Trivy Scan (Fail on CRITICAL/HIGH)
+        run: trivy image --exit-code 1 --severity CRITICAL,HIGH my-app:latest
