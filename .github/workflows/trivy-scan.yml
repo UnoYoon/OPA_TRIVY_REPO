@@ -1,59 +1,64 @@
-name: Trivy Security Scan
+name: Trivy Security Scan  # 워크플로 이름
 
 on:
   push:
     branches:
-      - main
+      - main  # main 브랜치에 push 발생 시 실행
   pull_request:
     branches:
-      - main
+      - main  # main 브랜치 대상 PR 생성/업데이트 시 실행
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # GitHub Actions에서 사용할 OS 환경
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3  # 현재 저장소의 코드를 체크아웃 (가져오기)
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v2  # Docker Buildx 설정 (멀티 플랫폼 빌드 지원)
 
       - name: Build Docker Image
-        run: docker build -t my-app:latest .
+        run: docker build -t my-app:latest .  # 현재 디렉토리 기준으로 Docker 이미지 빌드, 태그는 'my-app:latest'
 
       - name: Run Trivy via Docker
         run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            -v ${{ github.workspace }}:/workspace \
-            aquasec/trivy:latest \
-            image --exit-code 1 --severity CRITICAL,HIGH -f json -o /workspace/result.json my-app:latest
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \  # Docker socket 공유 (이미지 내부에서 Docker 컨트롤 가능하게)
+            -v ${{ github.workspace }}:/workspace \  # 워크스페이스 공유 (결과 파일 저장을 위해)
+            aquasec/trivy:latest \  # 최신 Trivy 컨테이너 사용
+            image --exit-code 1 --severity CRITICAL,HIGH -f json -o /workspace/result.json my-app:latest  
+            # my-app:latest 이미지 대상 취약점 스캔
+            # CRITICAL, HIGH 등급만 필터링
+            # 결과를 JSON으로 출력하여 /workspace/result.json 파일로 저장
+            # 취약점 존재 시 종료코드 1 반환 → 이후 step이 failure() 조건에서 실행됨
 
       - name: Upload full Trivy result as artifact
-        if: failure()
-        uses: actions/upload-artifact@v4  # ✅ v4로 수정 (v3는 더 이상 마켓에서 인식 안 됨)
+        if: failure()  # 이전 step에서 실패한 경우 (즉, 취약점이 발견된 경우)
+        uses: actions/upload-artifact@v4  # Trivy 결과 전체를 아티팩트로 업로드 (v4 사용 필수)
         with:
-          name: trivy-full-report
-          path: result.json
+          name: trivy-full-report  # 아티팩트 이름
+          path: result.json  # 업로드할 파일 경로
 
       - name: Comment Trivy summary to PR
-        if: failure() && github.event_name == 'pull_request'
+        if: failure() && github.event_name == 'pull_request'  # 취약점 발견 + 현재 이벤트가 PR일 경우에만 실행
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub API 인증용 토큰
         run: |
-          PR_NUMBER=$(jq --raw-output .number "$GITHUB_EVENT_PATH")  # ✅ 수정: `.pull_request.number` → `.number`
-          # JSON에서 취약점 관련 정보 추출
-          SUMMARY=$(jq '[.Results[].Vulnerabilities[] | {Target, PkgName, InstalledVersion, VulnerabilityID, Severity}]' result.json)
-          
-          # 취약점 요약: 처음 5개의 항목만 추출
-          SHORT_SUMMARY=$(echo "$SUMMARY" | jq '.[0:5]')
-          
-          # PR에 달 주석 내용 작성
+          PR_NUMBER=$(jq --raw-output .number "$GITHUB_EVENT_PATH")  
+          # PR 번호 추출 (GITHUB_EVENT_PATH의 JSON에서 .number 필드 읽기)
+
+          SUMMARY=$(jq '[.Results[].Vulnerabilities[] | {Target, PkgName, InstalledVersion, VulnerabilityID, Severity}]' result.json)  
+          # Trivy 결과 JSON에서 취약점 핵심 정보만 추출하여 요약 리스트 생성
+
+          SHORT_SUMMARY=$(echo "$SUMMARY" | jq '.[0:5]')  # 상위 5개 항목만 발췌
+
           COMMENT="🔐 **Trivy scan failed. Found critical/high vulnerabilities:**\n\n\`\`\`json\n$SHORT_SUMMARY\n\`\`\`\n📎 Full report attached as artifact."
-          
-          # PR에 주석 추가
+          # 주석으로 작성할 메시지 구성 (마크다운 형식)
+
           curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -X POST \
             -d "{\"body\": \"$COMMENT\"}" \
             "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
+          # GitHub API를 통해 해당 PR에 위에서 작성한 COMMENT를 주석으로 등록
